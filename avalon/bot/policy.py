@@ -52,6 +52,9 @@ class BotPolicy:
         if state.phase == "assassination" and player.role == Role.assassin:
             candidates = [p.id for p in state.players if p.id != player.id]
             return {"action_type": "assassinate", "payload": {"target_id": random.choice(candidates)}}
+        if state.phase == "lady_of_lake" and state.lady_holder_id == player.id:
+            candidates = [p.id for p in state.players if p.id != player.id]
+            return {"action_type": "lady_peek", "payload": {"target_id": random.choice(candidates)}}
         return {"action_type": "chat", "payload": {"message": "pass"}}
 
     @staticmethod

@@ -18,44 +18,57 @@ const publicStateEl = $("publicState");
 const eventLogEl = $("eventLog");
 const setupHintEl = $("setupHint");
 const roleHintEl = $("roleHint");
+const evilCountEl = $("evilCount");
+const goodCountEl = $("goodCount");
 
-const optionalRoles = [
-  "Morgana",
-  "Mordred",
-  "Oberon",
-  "Minion of Mordred",
-  "Loyal Servant",
+const roleOptions = [
+  { name: "Percival", alignment: "good", defaultOn: true },
+  { name: "Morgana", alignment: "evil", defaultOn: true },
+  { name: "Mordred", alignment: "evil", defaultOn: false },
+  { name: "Oberon", alignment: "evil", defaultOn: false },
 ];
 
-const mandatoryRoles = ["Merlin", "Percival", "Assassin"];
+const mandatoryRoles = ["Merlin", "Assassin"];
 
 let humanCount = 2;
 let botCount = 3;
+let evilCount = 2;
+
+function defaultEvilCount(total) {
+  if (total <= 6) return 2;
+  if (total <= 9) return 3;
+  return 4;
+}
 
 function updateTotals() {
   const total = humanCount + botCount;
+  evilCount = Math.min(Math.max(1, evilCount), Math.max(1, total - 2));
+  const goodCount = total - evilCount;
   humanCountEl.textContent = humanCount;
   botCountEl.textContent = botCount;
   totalCountEl.textContent = total;
+  evilCountEl.textContent = evilCount;
+  goodCountEl.textContent = goodCount;
   const valid = total >= 5 && total <= 10;
   totalCountEl.style.color = valid ? "inherit" : "#c75c2c";
 }
 
-function createRoleToggle(role) {
-  const wrapper = document.createElement("div");
-  wrapper.className = "role-card";
-  const label = document.createElement("label");
-  label.textContent = role;
-  const toggle = document.createElement("input");
-  toggle.type = "checkbox";
-  toggle.checked = role === "Loyal Servant";
-  toggle.dataset.role = role;
-  wrapper.appendChild(label);
-  wrapper.appendChild(toggle);
-  return wrapper;
+function createRoleButton(role) {
+  const button = document.createElement("button");
+  button.className = "role-toggle";
+  button.dataset.role = role.name;
+  button.dataset.alignment = role.alignment;
+  if (role.defaultOn) button.classList.add("active");
+  button.textContent = role.name;
+  button.addEventListener("click", () => {
+    button.classList.toggle("active");
+    enforcePercivalRule();
+    updateRoleHint();
+  });
+  return button;
 }
 
-optionalRoles.forEach((role) => roleGrid.appendChild(createRoleToggle(role)));
+roleOptions.forEach((role) => roleGrid.appendChild(createRoleButton(role)));
 
 function adjustCount(kind, delta) {
   if (kind === "human") {
@@ -63,6 +76,8 @@ function adjustCount(kind, delta) {
   } else {
     botCount = Math.max(0, botCount + delta);
   }
+  const total = humanCount + botCount;
+  evilCount = defaultEvilCount(total);
   updateTotals();
 }
 
@@ -70,6 +85,14 @@ $("humanUp").addEventListener("click", () => adjustCount("human", 1));
 $("humanDown").addEventListener("click", () => adjustCount("human", -1));
 $("botUp").addEventListener("click", () => adjustCount("bot", 1));
 $("botDown").addEventListener("click", () => adjustCount("bot", -1));
+$("evilUp").addEventListener("click", () => {
+  evilCount += 1;
+  updateTotals();
+});
+$("evilDown").addEventListener("click", () => {
+  evilCount -= 1;
+  updateTotals();
+});
 
 function buildPlayers() {
   const players = [];
@@ -83,18 +106,27 @@ function buildPlayers() {
 }
 
 function buildRoles(totalPlayers) {
-  const selected = mandatoryRoles.slice();
-  const toggles = roleGrid.querySelectorAll("input[type=checkbox]");
-  toggles.forEach((toggle) => {
-    if (toggle.checked) selected.push(toggle.dataset.role);
-  });
-  while (selected.length < totalPlayers) {
-    selected.push("Loyal Servant");
-  }
-  if (selected.length > totalPlayers) {
-    return null;
-  }
-  return selected;
+  const totalEvil = evilCount;
+  const totalGood = totalPlayers - totalEvil;
+
+  const goodRoles = ["Merlin"];
+  const evilRoles = ["Assassin"];
+
+  const activeRoles = [...roleGrid.querySelectorAll(".role-toggle.active")].map(
+    (btn) => btn.dataset.role
+  );
+
+  if (activeRoles.includes("Percival")) goodRoles.push("Percival");
+  if (activeRoles.includes("Morgana")) evilRoles.push("Morgana");
+  if (activeRoles.includes("Mordred")) evilRoles.push("Mordred");
+  if (activeRoles.includes("Oberon")) evilRoles.push("Oberon");
+
+  if (goodRoles.length > totalGood || evilRoles.length > totalEvil) return null;
+
+  while (goodRoles.length < totalGood) goodRoles.push("Loyal Servant");
+  while (evilRoles.length < totalEvil) evilRoles.push("Minion of Mordred");
+
+  return [...goodRoles, ...evilRoles];
 }
 
 function renderJoinLinks(players) {
@@ -107,7 +139,7 @@ function renderJoinLinks(players) {
     const card = document.createElement("div");
     card.className = "link-card";
     const url = `${window.location.origin}/play?player_id=${player.id}`;
-    card.innerHTML = `<strong>${player.name}</strong><p class="hint">${url}</p>`;
+    card.innerHTML = `<strong>${player.name}</strong><p class=\"hint\">${url}</p>`;
     joinLinksEl.appendChild(card);
   });
 }
@@ -142,13 +174,14 @@ $("createGame").addEventListener("click", async () => {
     }
     const roles = buildRoles(total);
     if (!roles) {
-      throw new Error("Too many roles selected for the player count.");
+      throw new Error("Role selection does not fit the good/evil counts.");
     }
     const hammer = $("hammerRule").checked;
+    const lady = $("ladyRule").checked;
     await api("/game/new", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ players, roles, hammer_auto_approve: hammer }),
+      body: JSON.stringify({ players, roles, hammer_auto_approve: hammer, lady_of_lake: lady }),
     });
     setupHintEl.textContent = "Game created.";
     renderJoinLinks(players);
@@ -170,13 +203,19 @@ $("startGame").addEventListener("click", async () => {
   }
 });
 
-function updateRoleHint() {
-  const toggles = roleGrid.querySelectorAll("input[type=checkbox]");
-  const selected = [...toggles].filter((toggle) => toggle.checked).map((toggle) => toggle.dataset.role);
-  roleHintEl.textContent = `Mandatory: ${mandatoryRoles.join(", ")}. Selected: ${selected.join(", ") || "None"}.`;
+function enforcePercivalRule() {
+  const percival = roleGrid.querySelector('[data-role="Percival"]');
+  const morgana = roleGrid.querySelector('[data-role="Morgana"]');
+  if (morgana.classList.contains("active") && !percival.classList.contains("active")) {
+    percival.classList.add("active");
+  }
 }
 
-roleGrid.addEventListener("change", updateRoleHint);
+function updateRoleHint() {
+  const active = [...roleGrid.querySelectorAll(".role-toggle.active")].map((btn) => btn.dataset.role);
+  roleHintEl.textContent = `Mandatory: ${mandatoryRoles.join(", ")}. Selected: ${active.join(", ") || "None"}.`;
+}
+
 updateRoleHint();
 updateTotals();
 refreshState();

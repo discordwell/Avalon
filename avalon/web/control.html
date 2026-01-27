@@ -11,9 +11,9 @@
       <header class="hero">
         <div>
           <p class="eyebrow">Avalon Control</p>
-          <h1>Launch the table. Hand out roles. Orchestrate the bots.</h1>
+          <h1>Set the table. Deal the roles. Keep the story moving.</h1>
           <p class="subhead">
-            Build the roster, choose the extra roles, then share the join links.
+            Choose players and roles, then share the join links for humans.
           </p>
         </div>
         <div class="status">
@@ -45,13 +45,29 @@
               </div>
             </div>
           </div>
+          <div class="row split">
+            <div>
+              <label>Evil players</label>
+              <div class="counter">
+                <button id="evilDown" class="ghost">-</button>
+                <span id="evilCount">2</span>
+                <button id="evilUp">+</button>
+              </div>
+            </div>
+            <div>
+              <label>Good players</label>
+              <div class="counter">
+                <span id="goodCount">3</span>
+              </div>
+            </div>
+          </div>
           <p class="hint">Total players: <span id="totalCount">5</span> (must be 5–10)</p>
         </div>
 
         <div class="panel">
           <h2>Optional Roles</h2>
           <div class="role-grid" id="roleGrid"></div>
-          <p class="hint" id="roleHint">Merlin, Percival, Assassin always included.</p>
+          <p class="hint" id="roleHint">Merlin & Assassin always included. Percival enables Morgana.</p>
         </div>
 
         <div class="panel">
@@ -59,6 +75,10 @@
           <label class="toggle">
             <input type="checkbox" id="hammerRule" checked />
             <span>Hammer auto-approve on 5th proposal</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="ladyRule" checked />
+            <span>Lady of the Lake enabled</span>
           </label>
           <div class="actions">
             <button id="createGame">Create Game</button>

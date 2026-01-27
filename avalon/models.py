@@ -17,6 +17,7 @@ class Phase(str, Enum):
     team_vote = "team_vote"
     quest = "quest"
     quest_result = "quest_result"
+    lady_of_lake = "lady_of_lake"
     assassination = "assassination"
     game_over = "game_over"
 
@@ -55,6 +56,7 @@ class GameConfig(BaseModel):
     player_count: int
     roles: List[Role]
     hammer_auto_approve: bool = True
+    lady_of_lake: bool = False
 
 
 class GameState(BaseModel):
@@ -75,6 +77,9 @@ class GameState(BaseModel):
     winner: Optional[Alignment] = None
     assassin_target: Optional[str] = None
     chat: List[ChatMessage] = Field(default_factory=list)
+    lady_holder_id: Optional[str] = None
+    lady_last_used_quest: Optional[int] = None
+    lady_history: List[Dict[str, str]] = Field(default_factory=list)
 
 
 class Event(BaseModel):
@@ -86,6 +91,7 @@ class CreateGameRequest(BaseModel):
     players: List[Player]
     roles: Optional[List[Role]] = None
     hammer_auto_approve: bool = True
+    lady_of_lake: bool = True
 
 
 class ActionRequest(BaseModel):

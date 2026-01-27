@@ -60,4 +60,9 @@ def build_action_instructions(state: GameState, player: Player) -> str:
             "Choose a target to assassinate. Output JSON like: "
             '{"action_type":"assassinate","payload":{"target_id":"id"}}'
         )
+    if state.phase == Phase.lady_of_lake and state.lady_holder_id == player.id:
+        return (
+            "Use Lady of the Lake to view alignment. Output JSON like: "
+            '{"action_type":"lady_peek","payload":{"target_id":"id"}}'
+        )
     return "If you have no required action, output {\"action_type\":\"chat\",\"payload\":{\"message\":\"pass\"}}"

@@ -125,10 +125,15 @@ class GameEngine:
                 raise ValueError("Unsupported player count or roles not provided")
             if len(roles) != player_count:
                 raise ValueError("Role count must match player count")
+            if Role.morgana in roles and Role.percival not in roles:
+                raise ValueError("Morgana requires Percival")
+            if Role.merlin not in roles or Role.assassin not in roles:
+                raise ValueError("Merlin and Assassin are required roles")
             config = GameConfig(
                 player_count=player_count,
                 roles=roles,
                 hammer_auto_approve=req.hammer_auto_approve,
+                lady_of_lake=req.lady_of_lake,
             )
             self._store.clear()
             self._state = GameState(
@@ -152,6 +157,9 @@ class GameEngine:
             state.leader_index = 0
             state.quest_number = 1
             state.proposal_attempts = 0
+            state.lady_holder_id = state.players[0].id if state.config.lady_of_lake else None
+            state.lady_last_used_quest = None
+            state.lady_history = []
             self._emit("game_started", {})
             return state
 
@@ -176,6 +184,8 @@ class GameEngine:
                 return self._handle_vote(state, player, payload)
             if action_type == "quest_vote":
                 return self._handle_quest_vote(state, player, payload)
+            if action_type == "lady_peek":
+                return self._handle_lady(state, player, payload)
             if action_type == "assassinate":
                 return self._handle_assassinate(state, player, payload)
 
@@ -185,6 +195,7 @@ class GameEngine:
         state = self.state.model_copy(deep=True)
         for p in state.players:
             p.role = None
+        state.lady_history = []
         return state
 
     def private_state_for(self, player_id: str) -> Dict:
@@ -199,6 +210,7 @@ class GameEngine:
             "knowledge": self._knowledge_for(player_id),
             "alignment": alignment_for(player.role) if player.role else None,
             "visibility": self._visibility_for(player_id),
+            "lady_knowledge": self._lady_knowledge_for(player_id),
         }
 
     def knowledge_for(self, player_id: str) -> List[str]:
@@ -315,9 +327,39 @@ class GameEngine:
             return state
 
         state.quest_number += 1
-        state.phase = Phase.team_proposal
         state.leader_index = (state.leader_index + 1) % len(state.players)
         state.proposal_attempts = 0
+        if (
+            state.config.lady_of_lake
+            and state.quest_number >= 3
+            and state.lady_last_used_quest != state.quest_number - 1
+        ):
+            state.phase = Phase.lady_of_lake
+        else:
+            state.phase = Phase.team_proposal
+        return state
+
+    def _handle_lady(self, state: GameState, player: Player, payload: Dict) -> GameState:
+        if state.phase != Phase.lady_of_lake:
+            raise ValueError("Not in Lady of the Lake phase")
+        if not state.config.lady_of_lake:
+            raise ValueError("Lady of the Lake is disabled")
+        if state.lady_holder_id != player.id:
+            raise ValueError("Only the Lady holder may act")
+        target_id = payload.get("target_id")
+        if not target_id or not self._has_player(target_id):
+            raise ValueError("Valid target_id required")
+        if target_id == player.id:
+            raise ValueError("Cannot target yourself")
+        target = self._get_player(target_id)
+        alignment = alignment_for(target.role).value if target.role else "unknown"
+        state.lady_history.append(
+            {"holder_id": player.id, "target_id": target_id, "alignment": alignment}
+        )
+        state.lady_holder_id = target_id
+        state.lady_last_used_quest = state.quest_number - 1
+        state.phase = Phase.team_proposal
+        self._emit("lady_peek", {"holder_id": player.id, "target_id": target_id})
         return state
 
     def _handle_assassinate(self, state: GameState, player: Player, payload: Dict) -> GameState:
@@ -366,6 +408,9 @@ class GameEngine:
             assassin = next((p for p in state.players if p.role == Role.assassin), None)
             if assassin and not state.assassin_target:
                 add_pending(assassin.id)
+        elif state.phase == Phase.lady_of_lake:
+            if state.lady_holder_id:
+                add_pending(state.lady_holder_id)
         return human_pending, bot_pending
 
     def _knowledge_for(self, player_id: str) -> List[str]:
@@ -397,6 +442,16 @@ class GameEngine:
             if candidates:
                 return ["Merlin is one of: " + ", ".join(candidates)]
         return []
+
+    def _lady_knowledge_for(self, player_id: str) -> List[str]:
+        knowledge: List[str] = []
+        for entry in self.state.lady_history:
+            if entry["holder_id"] == player_id:
+                target = self._get_player(entry["target_id"])
+                knowledge.append(
+                    f"Lady of the Lake: {target.name} is {entry['alignment']}."
+                )
+        return knowledge
 
     def _visibility_for(self, player_id: str) -> List[Dict]:
         player = self._get_player(player_id)
@@ -439,8 +494,6 @@ class GameEngine:
                     entry["alignment_hint"] = "merlin_candidate"
             return visibility
 
-        entry = next(e for e in visibility if e["id"] == player_id)
-        entry["alignment_hint"] = alignment_for(player.role).value
         return visibility
 
     def _emit(self, event_type: str, payload: Dict) -> None:

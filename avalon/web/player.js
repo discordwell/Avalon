@@ -23,7 +23,7 @@ let lastChatCount = 0;
 let cachedState = null;
 let cachedPrivate = null;
 
-function renderPlayerTable(visibility = []) {
+function renderPlayerTable(visibility = [], ladyHolderId) {
   playerTableEl.innerHTML = "";
   visibility.forEach((entry) => {
     const card = document.createElement("div");
@@ -35,7 +35,8 @@ function renderPlayerTable(visibility = []) {
       : entry.alignment_hint === "merlin_candidate"
       ? "Merlin?"
       : "Unknown";
-    card.innerHTML = `<div class="tag">${tag}</div><strong>${entry.name}</strong>`;
+    const ladyTag = entry.id === ladyHolderId ? "<div class=\"tag\">Lady</div>" : "";
+    card.innerHTML = `${ladyTag}<div class=\"tag\">${tag}</div><strong>${entry.name}</strong>`;
     playerTableEl.appendChild(card);
   });
 }
@@ -59,7 +60,7 @@ function renderPrivateIntel(privateState) {
     privateIntelEl.textContent = "No private intel yet.";
     return;
   }
-  const knowledge = privateState.knowledge || [];
+  const knowledge = [...(privateState.knowledge || []), ...(privateState.lady_knowledge || [])];
   privateIntelEl.textContent = knowledge.length ? knowledge.join("\n") : "No special intel.";
 }
 
@@ -161,6 +162,24 @@ function renderActionMenu(state, privateState) {
     return;
   }
 
+  if (phase === "lady_of_lake") {
+    if (state.lady_holder_id !== playerId) {
+      actionPanelEl.innerHTML = "<p class=\"hint\">Waiting for the Lady of the Lake.</p>";
+      return;
+    }
+    const select = document.createElement("select");
+    state.players.forEach((p) => {
+      if (p.id === playerId) return;
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      select.appendChild(opt);
+    });
+    actionPanelEl.appendChild(select);
+    addButton("Use Lady of the Lake", () => submitAction("lady_peek", { target_id: select.value }));
+    return;
+  }
+
   if (phase === "assassination") {
     if (privateState.role !== "Assassin") {
       actionPanelEl.innerHTML = "<p class=\"hint\">Waiting for the assassin.</p>";
@@ -231,7 +250,7 @@ async function refresh() {
     if (cachedPrivate) {
       renderRoleReveal(cachedPrivate);
       renderPrivateIntel(cachedPrivate);
-      renderPlayerTable(cachedPrivate.visibility || []);
+      renderPlayerTable(cachedPrivate.visibility || [], cachedState?.lady_holder_id);
     }
     renderActionMenu(cachedState, cachedPrivate || {});
   } catch (err) {

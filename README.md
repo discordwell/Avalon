@@ -90,7 +90,7 @@ curl "http://localhost:8000/game/state?player_id=p1"
 ```
 
 ## Notes
-- Role sets default to standard Avalon by player count. Pass `roles` in `/game/new` to customize.
-- For 7 players, default roles are Merlin, Percival, 2 Loyal, Assassin, Morgana, Minion.
+- Control UI lets you select # of humans/bots, evil count, and optional roles (Percival enables Morgana).
+- Merlin and Assassin are always included; other roles replace Loyal/Minion slots.
+- Lady of the Lake is enabled by default (toggle in control UI).
 - WebSocket stream (`/game/stream`) emits periodic state snapshots.
- - All roles are supported, but a 7-player game cannot include every role at once; pass a custom `roles` list to experiment.
