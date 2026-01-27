@@ -22,6 +22,7 @@ const hostRemoveHuman = $("hostRemoveHuman");
 
 const isHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 let playerId = localStorage.getItem("avalon_player_id") || "";
+let startRequested = false;
 
 function renderPlayers(players) {
   playerListEl.innerHTML = "";
@@ -126,6 +127,14 @@ function allHumansReady(players) {
   return humans.length > 0 && humans.every((p) => p.claimed && p.ready);
 }
 
+async function maybeStartGame(state) {
+  if (!isHost || startRequested) return;
+  if (!state.started && allHumansReady(state.players || [])) {
+    startRequested = true;
+    await api("/game/start", { method: "POST" });
+  }
+}
+
 async function refresh() {
   try {
     const state = await api("/game/state");
@@ -140,12 +149,13 @@ async function refresh() {
     if (isHost) {
       hostControlsEl.classList.remove("hidden");
       renderHostSlots(players);
+      await maybeStartGame(state.state);
     }
     const seat = players.find((p) => p.id === playerId);
     if (seat) {
       seatInfoEl.textContent = `Seat: ${seat.name}. Status: ${seat.ready ? "Ready" : "Joined"}.`;
     }
-    if (playerId && allHumansReady(players)) {
+    if (playerId && state.state.started) {
       window.location.href = `/game?player_id=${playerId}`;
     }
   } catch (err) {

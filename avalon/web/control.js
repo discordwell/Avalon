@@ -23,7 +23,6 @@ const goodCountEl = $("goodCount");
 const ladyToggle = $("ladyToggle");
 const joinSection = $("joinSection");
 const liveSection = $("liveSection");
-const slotListEl = $("slotList");
 
 const roleOptions = [
   { name: "Percival", alignment: "good", defaultOn: true },
@@ -41,7 +40,6 @@ let gameCreated = false;
 let gameStarted = false;
 let publicBaseUrl = window.location.origin;
 let tunnelPolling = null;
-let cachedPlayers = [];
 
 function defaultEvilCount(total) {
   if (total <= 6) return 2;
@@ -108,32 +106,6 @@ $("evilDown").addEventListener("click", () => {
   updateTotals();
 });
 
-$("addHumanSlot").addEventListener("click", async () => {
-  try {
-    await api("/game/players/add", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ is_bot: false }),
-    });
-    await refreshState();
-  } catch (err) {
-    setupHintEl.textContent = err.message;
-  }
-});
-
-$("addBotSlot").addEventListener("click", async () => {
-  try {
-    await api("/game/players/add", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ is_bot: true }),
-    });
-    await refreshState();
-  } catch (err) {
-    setupHintEl.textContent = err.message;
-  }
-});
-
 function buildPlayers() {
   const players = [];
   for (let i = 1; i <= humanCount; i += 1) {
@@ -176,78 +148,16 @@ function renderJoinLinks() {
   const url = `${publicBaseUrl}/lobby`;
   card.innerHTML = `<strong>Lobby link</strong><p class=\"hint\">${url}</p>`;
   joinLinksEl.appendChild(card);
-}
-
-function renderSlots(players) {
-  slotListEl.innerHTML = "";
-  if (!players.length) return;
-  players.forEach((player) => {
-    const row = document.createElement("div");
-    row.className = "slot-row";
-    const tag = document.createElement("span");
-    tag.className = "slot-tag";
-    tag.textContent = player.is_bot ? "Bot" : player.claimed ? "Claimed" : "Open";
-    const nameInput = document.createElement("input");
-    nameInput.value = player.name;
-    nameInput.disabled = player.is_bot;
-
-    const saveBtn = document.createElement("button");
-    saveBtn.className = "ghost";
-    saveBtn.textContent = "Rename";
-    saveBtn.disabled = player.is_bot;
-    saveBtn.addEventListener("click", async () => {
-      try {
-        await api("/game/players/rename", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ player_id: player.id, name: nameInput.value.trim() || player.name }),
-        });
-        await refreshState();
-      } catch (err) {
-        setupHintEl.textContent = err.message;
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(url).then(
+      () => {
+        setupHintEl.textContent = "Lobby link copied to clipboard.";
+      },
+      () => {
+        setupHintEl.textContent = "Lobby link ready.";
       }
-    });
-
-    const resetBtn = document.createElement("button");
-    resetBtn.className = "ghost";
-    resetBtn.textContent = "Remove player";
-    resetBtn.disabled = player.is_bot;
-    resetBtn.addEventListener("click", async () => {
-      try {
-        await api("/game/players/reset", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ player_id: player.id }),
-        });
-        await refreshState();
-      } catch (err) {
-        setupHintEl.textContent = err.message;
-      }
-    });
-
-    const removeBtn = document.createElement("button");
-    removeBtn.className = "ghost";
-    removeBtn.textContent = "Remove slot";
-    removeBtn.addEventListener("click", async () => {
-      try {
-        await api("/game/players/remove", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ player_id: player.id }),
-        });
-        await refreshState();
-      } catch (err) {
-        setupHintEl.textContent = err.message;
-      }
-    });
-
-    row.appendChild(tag);
-    row.appendChild(nameInput);
-    row.appendChild(saveBtn);
-    row.appendChild(resetBtn);
-    row.appendChild(removeBtn);
-    slotListEl.appendChild(row);
-  });
+    );
+  }
 }
 
 function updateVisibility() {
@@ -261,9 +171,9 @@ async function refreshState() {
     serverStatusEl.textContent = "Online";
     phaseValueEl.textContent = state.state ? state.state.phase : "No game";
     publicStateEl.textContent = JSON.stringify(state.state, null, 2);
-    if (state.state?.players) {
-      cachedPlayers = state.state.players;
-      renderSlots(cachedPlayers);
+    if (state.state?.started) {
+      gameStarted = true;
+      updateVisibility();
     }
   } catch (err) {
     serverStatusEl.textContent = "Offline";
@@ -288,7 +198,7 @@ async function startTunnel() {
       const status = await api("/tunnel/status");
       if (status.tunnel.public_url) {
         publicBaseUrl = status.tunnel.public_url;
-        setupHintEl.textContent = `Lobby link ready.`;
+        setupHintEl.textContent = "Lobby link ready.";
         clearInterval(tunnelPolling);
         tunnelPolling = null;
         if (gameCreated) {
@@ -326,25 +236,11 @@ $("createGame").addEventListener("click", async () => {
     setupHintEl.textContent = "Game created. Starting tunnel…";
     gameCreated = true;
     publicBaseUrl = window.location.origin;
-    cachedPlayers = players;
     renderJoinLinks();
     updateVisibility();
     await refreshState();
     await refreshEvents();
     await startTunnel();
-  } catch (err) {
-    setupHintEl.textContent = err.message;
-  }
-});
-
-$("startGame").addEventListener("click", async () => {
-  try {
-    await api("/game/start", { method: "POST" });
-    setupHintEl.textContent = "Game launched.";
-    gameStarted = true;
-    updateVisibility();
-    await refreshState();
-    await refreshEvents();
   } catch (err) {
     setupHintEl.textContent = err.message;
   }
