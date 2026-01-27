@@ -175,13 +175,11 @@ function renderJoinLinks(players) {
     return;
   }
   joinLinksEl.innerHTML = "";
-  players.filter((p) => !p.is_bot).forEach((player) => {
-    const card = document.createElement("div");
-    card.className = "link-card";
-    const url = `${publicBaseUrl}/play`;
-    card.innerHTML = `<strong>${player.name}</strong><p class=\"hint\">${url}</p>`;
-    joinLinksEl.appendChild(card);
-  });
+  const card = document.createElement("div");
+  card.className = "link-card";
+  const url = `${publicBaseUrl}/play`;
+  card.innerHTML = `<strong>Player picker</strong><p class=\"hint\">${url}</p>`;
+  joinLinksEl.appendChild(card);
 }
 
 function renderSlots(players) {
