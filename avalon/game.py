@@ -191,6 +191,67 @@ class GameEngine:
 
             raise ValueError(f"Unknown action: {action_type}")
 
+    async def add_player(self, is_bot: bool, name: Optional[str]) -> GameState:
+        async with self._lock:
+            state = self.state
+            if state.started:
+                raise ValueError("Game already started")
+            if len(state.players) >= 10:
+                raise ValueError("Max players reached")
+            prefix = "b" if is_bot else "h"
+            next_id = self._next_id(prefix)
+            display_name = name or (f"Bot {next_id[1:]}" if is_bot else f"Human {next_id[1:]}")
+            state.players.append(Player(id=next_id, name=display_name, is_bot=is_bot))
+            self._emit("player_added", {"player_id": next_id, "is_bot": is_bot})
+            return state
+
+    async def remove_player(self, player_id: str) -> GameState:
+        async with self._lock:
+            state = self.state
+            if state.started:
+                raise ValueError("Game already started")
+            if not self._has_player(player_id):
+                raise ValueError("Unknown player")
+            state.players = [p for p in state.players if p.id != player_id]
+            self._emit("player_removed", {"player_id": player_id})
+            return state
+
+    async def rename_player(self, player_id: str, name: str) -> GameState:
+        async with self._lock:
+            state = self.state
+            if state.started:
+                raise ValueError("Game already started")
+            player = self._get_player(player_id)
+            player.name = name
+            self._emit("player_renamed", {"player_id": player_id, "name": name})
+            return state
+
+    async def claim_player(self, player_id: str, name: str) -> GameState:
+        async with self._lock:
+            state = self.state
+            player = self._get_player(player_id)
+            if player.is_bot:
+                raise ValueError("Bots cannot be claimed")
+            if player.claimed:
+                raise ValueError("Player already claimed")
+            player.claimed = True
+            if name:
+                player.name = name
+            self._emit("player_claimed", {"player_id": player_id, "name": player.name})
+            return state
+
+    async def reset_player(self, player_id: str) -> GameState:
+        async with self._lock:
+            state = self.state
+            if state.started:
+                raise ValueError("Game already started")
+            player = self._get_player(player_id)
+            player.claimed = False
+            suffix = player.id[1:] if len(player.id) > 1 else ""
+            player.name = f"Bot {suffix}" if player.is_bot else f"Human {suffix}"
+            self._emit("player_reset", {"player_id": player_id})
+            return state
+
     def public_state(self) -> GameState:
         state = self.state.model_copy(deep=True)
         for p in state.players:
@@ -507,3 +568,14 @@ class GameEngine:
             if p.id == player_id:
                 return p
         raise ValueError("Unknown player")
+
+    def _next_id(self, prefix: str) -> str:
+        existing = [p.id for p in self.state.players if p.id.startswith(prefix)]
+        numbers = []
+        for pid in existing:
+            try:
+                numbers.append(int(pid[1:]))
+            except ValueError:
+                continue
+        next_num = max(numbers, default=0) + 1
+        return f"{prefix}{next_num}"

@@ -336,6 +336,36 @@ pre {
   gap: 16px;
 }
 
+.slot-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.slot-list {
+  display: grid;
+  gap: 12px;
+}
+
+.slot-row {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+  grid-template-columns: auto 1fr auto auto auto;
+  background: #fff;
+  border-radius: 14px;
+  border: var(--border);
+  padding: 10px 12px;
+}
+
+.slot-tag {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .hidden {
   display: none;
 }
@@ -349,5 +379,10 @@ pre {
   .action-strip {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .slot-row {
+    grid-template-columns: 1fr;
+    justify-items: start;
   }
 }

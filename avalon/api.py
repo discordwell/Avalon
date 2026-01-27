@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from .bot.manager import BotManager
 from .config import SETTINGS
 from .game import GameEngine
-from .models import ActionRequest, CreateGameRequest
+from .models import ActionRequest, CreateGameRequest, PlayerAddRequest, PlayerUpdateRequest
 from .storage import EventStore
 from .tunnel import TunnelManager
 
@@ -74,6 +74,40 @@ async def get_state(player_id: Optional[str] = None) -> Dict:
 @app.get("/game/events")
 async def get_events() -> Dict:
     return {"events": store.list_events()}
+
+
+@app.post("/game/players/add")
+async def add_player(req: PlayerAddRequest) -> Dict:
+    state = await engine.add_player(req.is_bot, req.name)
+    return {"state": engine.public_state()}
+
+
+@app.post("/game/players/remove")
+async def remove_player(req: PlayerUpdateRequest) -> Dict:
+    state = await engine.remove_player(req.player_id)
+    return {"state": engine.public_state()}
+
+
+@app.post("/game/players/rename")
+async def rename_player(req: PlayerUpdateRequest) -> Dict:
+    if not req.name:
+        return JSONResponse(status_code=400, content={"error": "Name required"})
+    state = await engine.rename_player(req.player_id, req.name)
+    return {"state": engine.public_state()}
+
+
+@app.post("/game/players/reset")
+async def reset_player(req: PlayerUpdateRequest) -> Dict:
+    state = await engine.reset_player(req.player_id)
+    return {"state": engine.public_state()}
+
+
+@app.post("/game/players/claim")
+async def claim_player(req: PlayerUpdateRequest) -> Dict:
+    if not req.name:
+        return JSONResponse(status_code=400, content={"error": "Name required"})
+    state = await engine.claim_player(req.player_id, req.name)
+    return {"state": engine.public_state()}
 
 
 @app.post("/tunnel/start")

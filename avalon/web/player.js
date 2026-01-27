@@ -8,7 +8,8 @@ const api = (path, options = {}) => fetch(path, options).then(async (res) => {
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(window.location.search);
-const playerId = params.get("player_id") || "";
+
+let playerId = params.get("player_id") || localStorage.getItem("avalon_player_id") || "";
 
 const playerNameEl = $("playerName");
 const roleRevealEl = $("roleReveal");
@@ -18,10 +19,25 @@ const playerTableEl = $("playerTable");
 const chatLogEl = $("chatLog");
 const actionPanelEl = $("actionPanel");
 const privateIntelEl = $("privateIntel");
+const pickerView = $("pickerView");
+const gameView = $("gameView");
+const playerPickerEl = $("playerPicker");
+const playerNameInput = $("playerNameInput");
+const pickerHintEl = $("pickerHint");
 
 let lastChatCount = 0;
 let cachedState = null;
 let cachedPrivate = null;
+
+function showPicker() {
+  pickerView.classList.remove("hidden");
+  gameView.classList.add("hidden");
+}
+
+function showGame() {
+  pickerView.classList.add("hidden");
+  gameView.classList.remove("hidden");
+}
 
 function renderPlayerTable(visibility = [], ladyHolderId) {
   playerTableEl.innerHTML = "";
@@ -232,6 +248,54 @@ $("sendChat").addEventListener("click", async () => {
   $("chatMessage").value = "";
 });
 
+async function claimSeat(targetId) {
+  const name = playerNameInput.value.trim();
+  if (!name) {
+    pickerHintEl.textContent = "Enter your name first.";
+    return;
+  }
+  try {
+    await api("/game/players/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ player_id: targetId, name }),
+    });
+    localStorage.setItem("avalon_player_id", targetId);
+    playerId = targetId;
+    pickerHintEl.textContent = "Seat claimed. Loading table…";
+    showGame();
+  } catch (err) {
+    pickerHintEl.textContent = err.message;
+  }
+}
+
+function renderPicker(players) {
+  playerPickerEl.innerHTML = "";
+  if (!players.length) {
+    playerPickerEl.textContent = "No players yet.";
+    return;
+  }
+  players
+    .filter((p) => !p.is_bot)
+    .forEach((player) => {
+      const row = document.createElement("div");
+      row.className = "slot-row";
+      const tag = document.createElement("span");
+      tag.className = "slot-tag";
+      tag.textContent = player.claimed ? "Claimed" : "Open";
+      const name = document.createElement("div");
+      name.textContent = player.name;
+      const pickBtn = document.createElement("button");
+      pickBtn.textContent = player.claimed ? "Taken" : "Choose";
+      pickBtn.disabled = player.claimed;
+      pickBtn.addEventListener("click", () => claimSeat(player.id));
+      row.appendChild(tag);
+      row.appendChild(name);
+      row.appendChild(pickBtn);
+      playerPickerEl.appendChild(row);
+    });
+}
+
 async function refresh() {
   try {
     const [publicState, privateState] = await Promise.all([
@@ -240,6 +304,21 @@ async function refresh() {
     ]);
     cachedState = publicState.state;
     cachedPrivate = privateState;
+
+    if (!cachedState) {
+      pickerHintEl.textContent = "Waiting for host to create a game.";
+      showPicker();
+      return;
+    }
+
+    renderPicker(cachedState.players || []);
+
+    if (!playerId) {
+      showPicker();
+      return;
+    }
+
+    showGame();
     if (cachedState) {
       phaseValueEl.textContent = cachedState.phase;
       questValueEl.textContent = cachedState.quest_number;

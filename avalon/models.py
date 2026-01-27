@@ -38,6 +38,7 @@ class Player(BaseModel):
     name: str
     is_bot: bool = False
     role: Optional[Role] = None
+    claimed: bool = False
 
 
 class ChatMessage(BaseModel):
@@ -98,3 +99,13 @@ class ActionRequest(BaseModel):
     player_id: str
     action_type: str
     payload: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PlayerUpdateRequest(BaseModel):
+    player_id: str
+    name: Optional[str] = None
+
+
+class PlayerAddRequest(BaseModel):
+    is_bot: bool = False
+    name: Optional[str] = None

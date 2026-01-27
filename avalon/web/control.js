@@ -23,6 +23,7 @@ const goodCountEl = $("goodCount");
 const ladyToggle = $("ladyToggle");
 const joinSection = $("joinSection");
 const liveSection = $("liveSection");
+const slotListEl = $("slotList");
 
 const roleOptions = [
   { name: "Percival", alignment: "good", defaultOn: true },
@@ -40,6 +41,7 @@ let gameCreated = false;
 let gameStarted = false;
 let publicBaseUrl = window.location.origin;
 let tunnelPolling = null;
+let cachedPlayers = [];
 
 function defaultEvilCount(total) {
   if (total <= 6) return 2;
@@ -106,6 +108,32 @@ $("evilDown").addEventListener("click", () => {
   updateTotals();
 });
 
+$("addHumanSlot").addEventListener("click", async () => {
+  try {
+    await api("/game/players/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_bot: false }),
+    });
+    await refreshState();
+  } catch (err) {
+    setupHintEl.textContent = err.message;
+  }
+});
+
+$("addBotSlot").addEventListener("click", async () => {
+  try {
+    await api("/game/players/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_bot: true }),
+    });
+    await refreshState();
+  } catch (err) {
+    setupHintEl.textContent = err.message;
+  }
+});
+
 function buildPlayers() {
   const players = [];
   for (let i = 1; i <= humanCount; i += 1) {
@@ -150,9 +178,82 @@ function renderJoinLinks(players) {
   players.filter((p) => !p.is_bot).forEach((player) => {
     const card = document.createElement("div");
     card.className = "link-card";
-    const url = `${publicBaseUrl}/play?player_id=${player.id}`;
+    const url = `${publicBaseUrl}/play`;
     card.innerHTML = `<strong>${player.name}</strong><p class=\"hint\">${url}</p>`;
     joinLinksEl.appendChild(card);
+  });
+}
+
+function renderSlots(players) {
+  slotListEl.innerHTML = "";
+  if (!players.length) return;
+  players.forEach((player) => {
+    const row = document.createElement("div");
+    row.className = "slot-row";
+    const nameInput = document.createElement("input");
+    nameInput.value = player.name;
+    nameInput.disabled = player.is_bot;
+
+    const tag = document.createElement("span");
+    tag.className = "slot-tag";
+    tag.textContent = player.is_bot ? "Bot" : player.claimed ? "Claimed" : "Open";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "ghost";
+    saveBtn.textContent = "Rename";
+    saveBtn.disabled = player.is_bot;
+    saveBtn.addEventListener("click", async () => {
+      try {
+        await api("/game/players/rename", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ player_id: player.id, name: nameInput.value.trim() || player.name }),
+        });
+        await refreshState();
+      } catch (err) {
+        setupHintEl.textContent = err.message;
+      }
+    });
+
+    const resetBtn = document.createElement("button");
+    resetBtn.className = "ghost";
+    resetBtn.textContent = "Remove player";
+    resetBtn.disabled = player.is_bot;
+    resetBtn.addEventListener("click", async () => {
+      try {
+        await api("/game/players/reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ player_id: player.id }),
+        });
+        await refreshState();
+      } catch (err) {
+        setupHintEl.textContent = err.message;
+      }
+    });
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "ghost";
+    removeBtn.textContent = "Remove slot";
+    removeBtn.addEventListener("click", async () => {
+      try {
+        await api("/game/players/remove", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ player_id: player.id }),
+        });
+        await refreshState();
+      } catch (err) {
+        setupHintEl.textContent = err.message;
+      }
+    });
+
+    row.appendChild(tag);
+    row.appendChild(nameInput);
+    row.appendChild(saveBtn);
+    row.appendChild(resetBtn);
+    row.appendChild(removeBtn);
+    slotListEl.appendChild(row);
   });
 }
 
@@ -167,6 +268,13 @@ async function refreshState() {
     serverStatusEl.textContent = "Online";
     phaseValueEl.textContent = state.state ? state.state.phase : "No game";
     publicStateEl.textContent = JSON.stringify(state.state, null, 2);
+    if (state.state?.players) {
+      cachedPlayers = state.state.players;
+      renderSlots(cachedPlayers);
+      if (gameCreated) {
+        renderJoinLinks(cachedPlayers);
+      }
+    }
   } catch (err) {
     serverStatusEl.textContent = "Offline";
     publicStateEl.textContent = "Unable to reach server.";
@@ -194,7 +302,7 @@ async function startTunnel() {
         clearInterval(tunnelPolling);
         tunnelPolling = null;
         if (gameCreated) {
-          renderJoinLinks(buildPlayers());
+          renderJoinLinks(cachedPlayers);
         }
       }
       if (status.tunnel.error) {
@@ -228,6 +336,7 @@ $("createGame").addEventListener("click", async () => {
     setupHintEl.textContent = "Game created. Starting public tunnel…";
     gameCreated = true;
     publicBaseUrl = window.location.origin;
+    cachedPlayers = players;
     renderJoinLinks(players);
     updateVisibility();
     await refreshState();
