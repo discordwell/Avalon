@@ -38,6 +38,8 @@ let botCount = 3;
 let evilCount = 2;
 let gameCreated = false;
 let gameStarted = false;
+let publicBaseUrl = window.location.origin;
+let tunnelPolling = null;
 
 function defaultEvilCount(total) {
   if (total <= 6) return 2;
@@ -148,7 +150,7 @@ function renderJoinLinks(players) {
   players.filter((p) => !p.is_bot).forEach((player) => {
     const card = document.createElement("div");
     card.className = "link-card";
-    const url = `${window.location.origin}/play?player_id=${player.id}`;
+    const url = `${publicBaseUrl}/play?player_id=${player.id}`;
     card.innerHTML = `<strong>${player.name}</strong><p class=\"hint\">${url}</p>`;
     joinLinksEl.appendChild(card);
   });
@@ -180,6 +182,32 @@ async function refreshEvents() {
   }
 }
 
+async function startTunnel() {
+  try {
+    await api("/tunnel/start", { method: "POST" });
+    if (tunnelPolling) return;
+    tunnelPolling = setInterval(async () => {
+      const status = await api("/tunnel/status");
+      if (status.tunnel.public_url) {
+        publicBaseUrl = status.tunnel.public_url;
+        setupHintEl.textContent = `Public link: ${publicBaseUrl}`;
+        clearInterval(tunnelPolling);
+        tunnelPolling = null;
+        if (gameCreated) {
+          renderJoinLinks(buildPlayers());
+        }
+      }
+      if (status.tunnel.error) {
+        setupHintEl.textContent = status.tunnel.error;
+        clearInterval(tunnelPolling);
+        tunnelPolling = null;
+      }
+    }, 1200);
+  } catch (err) {
+    setupHintEl.textContent = err.message;
+  }
+}
+
 $("createGame").addEventListener("click", async () => {
   try {
     const players = buildPlayers();
@@ -197,12 +225,14 @@ $("createGame").addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ players, roles, hammer_auto_approve: true, lady_of_lake: lady }),
     });
-    setupHintEl.textContent = "Game created.";
+    setupHintEl.textContent = "Game created. Starting public tunnel…";
     gameCreated = true;
+    publicBaseUrl = window.location.origin;
     renderJoinLinks(players);
     updateVisibility();
     await refreshState();
     await refreshEvents();
+    await startTunnel();
   } catch (err) {
     setupHintEl.textContent = err.message;
   }

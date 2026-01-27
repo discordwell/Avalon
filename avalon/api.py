@@ -14,11 +14,13 @@ from .config import SETTINGS
 from .game import GameEngine
 from .models import ActionRequest, CreateGameRequest
 from .storage import EventStore
+from .tunnel import TunnelManager
 
 
 store = EventStore(SETTINGS.database_path)
 engine = GameEngine(store)
 bot_manager = BotManager(engine)
+tunnel_manager = TunnelManager(f"http://localhost:{SETTINGS.port}")
 
 app = FastAPI(title="Avalon")
 WEB_DIR = Path(__file__).parent / "web"
@@ -42,7 +44,7 @@ async def play() -> FileResponse:
 
 @app.post("/game/new")
 async def new_game(req: CreateGameRequest) -> Dict:
-    state = await engine.create_game(req)
+    await engine.create_game(req)
     return {"state": engine.public_state()}
 
 
@@ -72,6 +74,24 @@ async def get_state(player_id: Optional[str] = None) -> Dict:
 @app.get("/game/events")
 async def get_events() -> Dict:
     return {"events": store.list_events()}
+
+
+@app.post("/tunnel/start")
+async def start_tunnel() -> Dict:
+    status = tunnel_manager.start()
+    return {"tunnel": status.__dict__}
+
+
+@app.get("/tunnel/status")
+async def tunnel_status() -> Dict:
+    status = tunnel_manager.status()
+    return {"tunnel": status.__dict__}
+
+
+@app.post("/tunnel/stop")
+async def stop_tunnel() -> Dict:
+    status = tunnel_manager.stop()
+    return {"tunnel": status.__dict__}
 
 
 @app.websocket("/game/stream")
