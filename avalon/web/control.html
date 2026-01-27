@@ -16,25 +16,15 @@
             Choose players and roles, then share the join links for humans.
           </p>
         </div>
-        <div class="hero-stack">
-          <div class="status">
-            <div class="status-label">Server</div>
-            <div class="status-value" id="serverStatus">Checking…</div>
-            <div class="status-label">Phase</div>
-            <div class="status-value" id="phaseValue">—</div>
-          </div>
-          <div class="action-card">
-            <div class="status-label">Launch</div>
-            <div class="actions">
-              <button id="createGame">Create Game</button>
-              <button id="startGame" class="ghost">Start Game</button>
-            </div>
-            <p class="hint" id="setupHint"></p>
-          </div>
+        <div class="status">
+          <div class="status-label">Server</div>
+          <div class="status-value" id="serverStatus">Checking…</div>
+          <div class="status-label">Phase</div>
+          <div class="status-value" id="phaseValue">—</div>
         </div>
       </header>
 
-      <section class="grid">
+      <section class="grid roster-grid">
         <div class="panel">
           <h2>Roster</h2>
           <div class="row split">
@@ -75,29 +65,43 @@
         </div>
 
         <div class="panel">
-          <h2>Optional Roles</h2>
+          <h2>Roles</h2>
           <div class="role-grid" id="roleGrid"></div>
           <div class="role-grid role-grid-footer">
             <button id="ladyToggle" class="role-toggle" data-feature="lady">Lady of the Lake</button>
           </div>
           <p class="hint" id="roleHint">Merlin & Assassin always included. Percival enables Morgana.</p>
         </div>
+      </section>
 
-        <div class="panel span">
+      <section class="panel action-strip">
+        <div>
+          <h2>Launch</h2>
+          <p class="hint">Hammer auto-approve on 5th proposal is always on.</p>
+        </div>
+        <div class="actions">
+          <button id="createGame">Create Game</button>
+          <button id="startGame" class="ghost">Launch Game</button>
+        </div>
+        <p class="hint" id="setupHint"></p>
+      </section>
+
+      <section class="grid">
+        <div class="panel span hidden" id="joinSection">
           <h2>Join Links</h2>
-          <p class="hint">Share with humans after you create the game.</p>
+          <p class="hint">Share with humans once the game is created.</p>
           <div id="joinLinks" class="link-grid">No links yet.</div>
         </div>
 
-        <div class="panel span">
-          <h2>Live State</h2>
+        <div class="panel span hidden" id="liveSection">
           <div class="split">
             <div>
-              <h3>Public state</h3>
+              <h2>Live State</h2>
+              <p class="hint">Spoilers ahead. Debug only.</p>
               <pre id="publicState">Waiting for server…</pre>
             </div>
             <div>
-              <h3>Event log</h3>
+              <h2>Event Log</h2>
               <pre id="eventLog">No events yet.</pre>
             </div>
           </div>

@@ -21,6 +21,8 @@ const roleHintEl = $("roleHint");
 const evilCountEl = $("evilCount");
 const goodCountEl = $("goodCount");
 const ladyToggle = $("ladyToggle");
+const joinSection = $("joinSection");
+const liveSection = $("liveSection");
 
 const roleOptions = [
   { name: "Percival", alignment: "good", defaultOn: true },
@@ -34,6 +36,8 @@ const mandatoryRoles = ["Merlin", "Assassin"];
 let humanCount = 2;
 let botCount = 3;
 let evilCount = 2;
+let gameCreated = false;
+let gameStarted = false;
 
 function defaultEvilCount(total) {
   if (total <= 6) return 2;
@@ -70,6 +74,7 @@ function createRoleButton(role) {
 }
 
 roleOptions.forEach((role) => roleGrid.appendChild(createRoleButton(role)));
+
 ladyToggle.addEventListener("click", () => {
   ladyToggle.classList.toggle("active");
   updateRoleHint();
@@ -149,6 +154,11 @@ function renderJoinLinks(players) {
   });
 }
 
+function updateVisibility() {
+  joinSection.classList.toggle("hidden", !gameCreated);
+  liveSection.classList.toggle("hidden", !gameStarted);
+}
+
 async function refreshState() {
   try {
     const state = await api("/game/state");
@@ -188,7 +198,9 @@ $("createGame").addEventListener("click", async () => {
       body: JSON.stringify({ players, roles, hammer_auto_approve: true, lady_of_lake: lady }),
     });
     setupHintEl.textContent = "Game created.";
+    gameCreated = true;
     renderJoinLinks(players);
+    updateVisibility();
     await refreshState();
     await refreshEvents();
   } catch (err) {
@@ -199,7 +211,9 @@ $("createGame").addEventListener("click", async () => {
 $("startGame").addEventListener("click", async () => {
   try {
     await api("/game/start", { method: "POST" });
-    setupHintEl.textContent = "Game started.";
+    setupHintEl.textContent = "Game launched.";
+    gameStarted = true;
+    updateVisibility();
     await refreshState();
     await refreshEvents();
   } catch (err) {
@@ -220,13 +234,12 @@ function updateRoleHint() {
     (btn) => btn.dataset.role
   );
   const lady = ladyToggle.classList.contains("active") ? "Lady of the Lake" : "Lady off";
-  roleHintEl.textContent = `Mandatory: ${mandatoryRoles.join(", ")}. Selected: ${active.join(
-    ", "
-  ) || "None"}. ${lady}.`;
+  roleHintEl.textContent = `Mandatory: ${mandatoryRoles.join(", ")}. Selected: ${active.join(", ") || "None"}. ${lady}.`;
 }
 
 updateRoleHint();
 updateTotals();
+updateVisibility();
 refreshState();
 refreshEvents();
 setInterval(refreshState, 2000);

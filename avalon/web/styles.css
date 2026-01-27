@@ -35,17 +35,11 @@ body {
   gap: 32px;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .hero.compact {
   align-items: flex-start;
-}
-
-.hero-stack {
-  display: grid;
-  gap: 14px;
-  align-content: start;
 }
 
 .hero h1 {
@@ -58,13 +52,9 @@ body {
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.22em;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--accent-2);
   font-size: 0.75rem;
-}
-
-.hero .eyebrow {
-  font-weight: 700;
 }
 
 .subhead {
@@ -81,18 +71,6 @@ body {
   min-width: 220px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(12px);
-}
-
-.action-card {
-  background: var(--panel);
-  border: var(--border);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  box-shadow: var(--shadow);
-}
-
-.action-card .actions {
-  margin-top: 10px;
 }
 
 .status-label {
@@ -117,6 +95,11 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
+.roster-grid {
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  align-items: stretch;
+}
+
 .panel {
   background: var(--panel);
   border-radius: var(--radius);
@@ -127,11 +110,6 @@ body {
 
 .panel h2 {
   margin-top: 0;
-  font-family: "Iowan Old Style", "Palatino", "Times New Roman", serif;
-}
-
-h3 {
-  margin-bottom: 8px;
   font-family: "Iowan Old Style", "Palatino", "Times New Roman", serif;
 }
 
@@ -351,8 +329,24 @@ pre {
   gap: 12px;
 }
 
+.action-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hidden {
+  display: none;
+}
+
 @media (max-width: 900px) {
   .hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .action-strip {
     flex-direction: column;
     align-items: flex-start;
   }
