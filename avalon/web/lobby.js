@@ -15,6 +15,8 @@ const joinBtn = $("joinBtn");
 const readyBtn = $("readyBtn");
 const lobbyHintEl = $("lobbyHint");
 const seatInfoEl = $("seatInfo");
+const personalLinkCardEl = $("personalLinkCard");
+const personalLinkTextEl = $("personalLinkText");
 const hostControlsEl = $("hostControls");
 const hostSlotListEl = $("hostSlotList");
 const hostAddHuman = $("hostAddHuman");
@@ -37,6 +39,23 @@ if (urlPlayerToken) {
 }
 
 const isHost = Boolean(hostToken) || ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
+function updatePersonalLink() {
+  if (!playerToken) {
+    personalLinkCardEl.classList.add("hidden");
+    personalLinkTextEl.textContent = "—";
+    return;
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set("token", playerToken);
+  if (hostToken) {
+    url.searchParams.set("host_token", hostToken);
+  } else {
+    url.searchParams.delete("host_token");
+  }
+  personalLinkTextEl.textContent = url.toString();
+  personalLinkCardEl.classList.remove("hidden");
+}
 
 function renderPlayers(players) {
   playerListEl.innerHTML = "";
@@ -114,7 +133,15 @@ async function joinGame() {
       localStorage.setItem("avalon_player_token", playerToken);
       const url = new URL(window.location.href);
       url.searchParams.set("token", playerToken);
+      if (hostToken) {
+        url.searchParams.set("host_token", hostToken);
+      } else {
+        url.searchParams.delete("host_token");
+      }
       window.history.replaceState({}, "", url);
+      updatePersonalLink();
+    } else {
+      personalLinkCardEl.classList.add("hidden");
     }
     if (result.state?.id) {
       gameId = result.state.id;
@@ -158,6 +185,11 @@ async function refresh() {
       lobbyHintEl.textContent = "Waiting for host to create a game.";
       return;
     }
+    if (playerId && !playerToken && !isHost) {
+      playerId = "";
+      localStorage.removeItem("avalon_player_id");
+      lobbyHintEl.textContent = "Missing player token. Please click Join again.";
+    }
     if (state.state.id && state.state.id !== gameId) {
       gameId = state.state.id;
       localStorage.setItem("avalon_game_id", gameId);
@@ -180,6 +212,7 @@ async function refresh() {
     if (seat) {
       seatInfoEl.textContent = `Seat: ${seat.name}. Status: ${seat.ready ? "Ready" : "Joined"}.`;
     }
+    updatePersonalLink();
     if (playerId && state.state.started) {
       if (playerToken) {
         window.location.href = `/game?token=${playerToken}`;

@@ -35,6 +35,10 @@
           </div>
           <p class="hint" id="lobbyHint"></p>
           <div class="card" id="seatInfo">No seat claimed yet.</div>
+          <div class="card hidden" id="personalLinkCard">
+            <strong>Your game link</strong>
+            <p class="hint" id="personalLinkText">—</p>
+          </div>
         </div>
 
         <div class="panel">
@@ -44,7 +48,7 @@
 
         <div class="panel span host-only hidden" id="hostControls">
           <h2>Host Controls</h2>
-          <p class="hint">Visible only on localhost.</p>
+          <p class="hint">Visible only to the host link.</p>
           <div class="slot-actions">
             <button id="hostAddHuman" class="ghost">Add human slot</button>
             <button id="hostRemoveHuman" class="ghost">Remove human slot</button>

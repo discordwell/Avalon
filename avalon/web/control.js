@@ -44,6 +44,7 @@ let gameStarted = false;
 let publicBaseUrl = null;
 let tunnelPolling = null;
 let hostToken = localStorage.getItem("avalon_host_token") || "";
+let countdownStarted = false;
 
 function defaultEvilCount(total) {
   if (total <= 6) return 2;
@@ -221,6 +222,8 @@ async function ensureHostToken() {
 }
 
 async function startCountdown(url) {
+  if (countdownStarted) return;
+  countdownStarted = true;
   let timeLeft = 3;
   countdownModal.classList.remove("hidden");
   await ensureHostToken();
@@ -291,6 +294,7 @@ $("createGame").addEventListener("click", async () => {
     localStorage.removeItem("avalon_player_token");
     setupHintEl.textContent = "Game created. Starting tunnel…";
     gameCreated = true;
+    countdownStarted = false;
     publicBaseUrl = null;
     renderJoinLinks();
     updateVisibility();
