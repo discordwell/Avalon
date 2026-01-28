@@ -144,6 +144,11 @@ async def join_player(req: PlayerJoinRequest) -> Dict:
 @app.post("/game/players/ready")
 async def ready_player(req: PlayerReadyRequest) -> Dict:
     state = await engine.set_ready(req.player_id, req.ready)
+    humans = [p for p in state.players if not p.is_bot]
+    all_ready = humans and all(p.claimed and p.ready for p in humans)
+    if not state.started and all_ready:
+        await engine.start_game()
+        await bot_manager.maybe_act()
     return {"state": engine.public_state()}
 
 

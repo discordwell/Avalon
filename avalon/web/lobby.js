@@ -22,7 +22,6 @@ const hostRemoveHuman = $("hostRemoveHuman");
 
 const isHost = ["localhost", "127.0.0.1"].includes(window.location.hostname) || window.location.hostname.endsWith(".trycloudflare.com");
 let playerId = localStorage.getItem("avalon_player_id") || "";
-let startRequested = false;
 
 function renderPlayers(players) {
   playerListEl.innerHTML = "";
@@ -122,22 +121,6 @@ async function readyUp() {
   }
 }
 
-function allHumansReady(players) {
-  const humans = players.filter((p) => !p.is_bot);
-  return humans.length > 0 && humans.every((p) => p.claimed && p.ready);
-}
-
-async function maybeStartGame(state) {
-  if (startRequested) return;
-  const ready = allHumansReady(state.players || []);
-  console.log("Checking start:", { started: state.started, isHost, ready, players: state.players });
-  if (!state.started && ready) {
-    console.log("Starting game...");
-    startRequested = true;
-    await api("/game/start", { method: "POST" });
-  }
-}
-
 async function refresh() {
   try {
     const state = await api("/game/state");
@@ -153,7 +136,6 @@ async function refresh() {
       hostControlsEl.classList.remove("hidden");
       renderHostSlots(players);
     }
-    await maybeStartGame(state.state);
     const seat = players.find((p) => p.id === playerId);
     if (seat) {
       seatInfoEl.textContent = `Seat: ${seat.name}. Status: ${seat.ready ? "Ready" : "Joined"}.`;
