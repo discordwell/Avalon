@@ -198,7 +198,7 @@ async function refreshEvents() {
 }
 
 function startCountdown(url) {
-  let timeLeft = 10;
+  let timeLeft = 3;
   countdownModal.classList.remove("hidden");
   countdownLink.href = url + "/lobby";
 
