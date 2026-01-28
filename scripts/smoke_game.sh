@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PORT=${AVALON_SMOKE_PORT:-8001}
+PORT=${AVALON_SMOKE_PORT:-8000}
 export AVALON_PORT="$PORT"
 export AVALON_BOT_MODE="heuristic"
 export AVALON_DEBUG="1"
@@ -61,6 +61,15 @@ ready = post("/game/players/ready", {"token": join.get("token"), "ready": True})
 print("started:", ready.get("state", {}).get("started"))
 
 private_state = get(f"/game/state?token={join.get('token')}")
+game_url = f"{base}/game?token={join.get('token')}"
+with open("/tmp/avalon-smoke-url", "w", encoding="utf-8") as handle:
+    handle.write(game_url)
+print("game_url:", game_url)
 print("private_state:")
 print(json.dumps(private_state, indent=2))
 PY
+
+GAME_URL=$(cat /tmp/avalon-smoke-url 2>/dev/null || true)
+if [ -n "$GAME_URL" ]; then
+  open "$GAME_URL" >/dev/null 2>&1 || true
+fi
