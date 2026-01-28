@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
+import os
 from typing import Dict, Optional
 
 from pathlib import Path
@@ -22,6 +25,20 @@ from .models import (
 )
 from .storage import EventStore
 from .tunnel import TunnelManager
+
+logger = logging.getLogger("avalon")
+DEBUG_LOGS = os.getenv("AVALON_DEBUG", "").lower() in {"1", "true", "yes"}
+
+
+def log_event(event: str, **fields: object) -> None:
+    if not DEBUG_LOGS:
+        return
+    payload = {"event": event, **fields}
+    logger.info(json.dumps(payload, ensure_ascii=True))
+
+
+if DEBUG_LOGS:
+    logging.basicConfig(level=logging.INFO)
 
 
 store = EventStore(SETTINGS.database_path)
@@ -61,13 +78,21 @@ async def lobby() -> FileResponse:
 
 @app.post("/game/new")
 async def new_game(req: CreateGameRequest) -> Dict:
-    await engine.create_game(req)
+    state = await engine.create_game(req)
+    log_event(
+        "game_created",
+        game_id=state.id,
+        player_count=len(state.players),
+        bot_count=sum(1 for p in state.players if p.is_bot),
+        lady_of_lake=state.config.lady_of_lake,
+    )
     return {"state": engine.public_state(), "host_token": engine.host_token()}
 
 
 @app.post("/game/start")
 async def start_game() -> Dict:
-    await engine.start_game()
+    state = await engine.start_game()
+    log_event("game_started", game_id=state.id, player_count=len(state.players))
     await bot_manager.maybe_act()
     return {"state": engine.public_state()}
 
@@ -81,6 +106,7 @@ async def action(req: ActionRequest, request: Request) -> Dict:
         return JSONResponse(status_code=400, content={"error": "token required"})
     if not req.token and request.client and request.client.host not in ("127.0.0.1", "::1"):
         return JSONResponse(status_code=403, content={"error": "token required"})
+    log_event("player_action", player_id=player_id, action_type=req.action_type)
     await engine.apply_action(player_id, req.action_type, req.payload)
     await bot_manager.maybe_act()
     return {"state": engine.public_state()}
@@ -124,6 +150,12 @@ async def add_player(req: PlayerAddRequest, request: Request) -> Dict:
     ):
         return JSONResponse(status_code=403, content={"error": "host token required"})
     state = await engine.add_player(req.is_bot, req.name)
+    log_event(
+        "player_added",
+        game_id=state.id,
+        player_id=state.players[-1].id if state.players else None,
+        is_bot=req.is_bot,
+    )
     return {"state": engine.public_state()}
 
 
@@ -136,6 +168,7 @@ async def remove_player(req: PlayerUpdateRequest, request: Request) -> Dict:
     ):
         return JSONResponse(status_code=403, content={"error": "host token required"})
     state = await engine.remove_player(req.player_id)
+    log_event("player_removed", game_id=state.id, player_id=req.player_id)
     return {"state": engine.public_state()}
 
 
@@ -148,6 +181,7 @@ async def remove_last_human(request: Request, host_token: Optional[str] = None) 
     ):
         return JSONResponse(status_code=403, content={"error": "host token required"})
     state = await engine.remove_last_human_slot()
+    log_event("human_slot_removed", game_id=state.id)
     return {"state": engine.public_state()}
 
 
@@ -162,6 +196,7 @@ async def rename_player(req: PlayerUpdateRequest, request: Request) -> Dict:
     if not req.name:
         return JSONResponse(status_code=400, content={"error": "Name required"})
     state = await engine.rename_player(req.player_id, req.name)
+    log_event("player_renamed", game_id=state.id, player_id=req.player_id, name=req.name)
     return {"state": engine.public_state()}
 
 
@@ -174,6 +209,7 @@ async def reset_player(req: PlayerUpdateRequest, request: Request) -> Dict:
     ):
         return JSONResponse(status_code=403, content={"error": "host token required"})
     state = await engine.reset_player(req.player_id)
+    log_event("player_reset", game_id=state.id, player_id=req.player_id)
     return {"state": engine.public_state()}
 
 
@@ -191,6 +227,7 @@ async def join_player(req: PlayerJoinRequest) -> Dict:
         return JSONResponse(status_code=400, content={"error": "Name required"})
     player = await engine.join_next_human(req.name)
     token = engine.token_for(player.id)
+    log_event("player_joined", player_id=player.id, name=player.name, is_bot=player.is_bot)
     return {"player_id": player.id, "token": token, "state": engine.public_state()}
 
 
@@ -204,10 +241,18 @@ async def ready_player(req: PlayerReadyRequest, request: Request) -> Dict:
     if not req.token and request.client and request.client.host not in ("127.0.0.1", "::1"):
         return JSONResponse(status_code=403, content={"error": "token required"})
     state = await engine.set_ready(player_id, req.ready)
+    log_event(
+        "player_ready",
+        game_id=state.id,
+        player_id=player_id,
+        ready=req.ready,
+        started=state.started,
+    )
     humans = [p for p in state.players if not p.is_bot]
     all_ready = humans and all(p.claimed and p.ready for p in humans)
     if not state.started and all_ready:
-        await engine.start_game()
+        state = await engine.start_game()
+        log_event("game_auto_started", game_id=state.id, player_count=len(state.players))
         await bot_manager.maybe_act()
     return {"state": engine.public_state()}
 
