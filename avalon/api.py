@@ -51,6 +51,20 @@ WEB_DIR = Path(__file__).parent / "web"
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 
+@app.on_event("startup")
+async def start_bot_loop() -> None:
+    async def bot_loop() -> None:
+        while True:
+            try:
+                if engine.has_state():
+                    await bot_manager.maybe_act()
+            except Exception as exc:  # pragma: no cover - best-effort background loop
+                log_event("bot_loop_error", error=str(exc))
+            await asyncio.sleep(0.5)
+
+    asyncio.create_task(bot_loop())
+
+
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(WEB_DIR / "control.html")
@@ -118,6 +132,8 @@ async def get_state(
 ) -> Dict:
     if not engine.has_state():
         return {"state": None}
+    pending_humans, pending_bots = engine.pending_actions()
+    pending = {"human": pending_humans, "bot": pending_bots}
     if token:
         player_id = engine.player_id_for_token(token)
     if player_id:
@@ -125,8 +141,9 @@ async def get_state(
             return JSONResponse(status_code=403, content={"error": "token required"})
         payload = engine.private_state_for(player_id)
         payload["player_id"] = player_id
+        payload["pending"] = pending
         return payload
-    return {"state": engine.public_state()}
+    return {"state": engine.public_state(), "pending": pending}
 
 
 @app.get("/game/host_token")

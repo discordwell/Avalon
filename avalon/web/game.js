@@ -20,6 +20,7 @@ const playerTableEl = $("playerTable");
 const chatLogEl = $("chatLog");
 const actionPanelEl = $("actionPanel");
 const privateIntelEl = $("privateIntel");
+const botStatusEl = $("botStatus");
 
 let lastChatCount = 0;
 let cachedState = null;
@@ -253,6 +254,7 @@ async function refresh() {
     ]);
     cachedState = publicState.state;
     cachedPrivate = privateState;
+    const pending = privateState?.pending || publicState?.pending || null;
     if (cachedPrivate?.player_id) {
       playerId = cachedPrivate.player_id;
       localStorage.setItem("avalon_player_id", playerId);
@@ -281,6 +283,13 @@ async function refresh() {
       renderPlayerTable(cachedPrivate.visibility || [], cachedState?.lady_holder_id);
     }
     renderActionMenu(cachedState, cachedPrivate || {});
+    if (pending && pending.bot && pending.bot.length && !(pending.human && pending.human.length)) {
+      botStatusEl.textContent = `Bots are thinking… (${pending.bot.length} pending)`;
+      botStatusEl.classList.remove("hidden");
+    } else {
+      botStatusEl.textContent = "";
+      botStatusEl.classList.add("hidden");
+    }
   } catch (err) {
     roleRevealEl.textContent = "Unable to reach server.";
   }
