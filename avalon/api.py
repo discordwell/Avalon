@@ -103,6 +103,13 @@ async def get_state(
     return {"state": engine.public_state()}
 
 
+@app.get("/game/host_token")
+async def get_host_token(request: Request) -> Dict:
+    if request.client and request.client.host not in ("127.0.0.1", "::1"):
+        return JSONResponse(status_code=403, content={"error": "localhost only"})
+    return {"host_token": engine.host_token()}
+
+
 @app.get("/game/events")
 async def get_events() -> Dict:
     return {"events": store.list_events()}

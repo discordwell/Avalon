@@ -229,6 +229,17 @@ async function startTunnel() {
       const status = await api("/tunnel/status");
       if (status.tunnel.public_url) {
         publicBaseUrl = status.tunnel.public_url;
+        if (!hostToken) {
+          try {
+            const hostResponse = await api("/game/host_token");
+            hostToken = hostResponse.host_token || "";
+            if (hostToken) {
+              localStorage.setItem("avalon_host_token", hostToken);
+            }
+          } catch (err) {
+            // Ignore; countdown will fall back to lobby without host token.
+          }
+        }
         setupHintEl.textContent = "Lobby link ready.";
         clearInterval(tunnelPolling);
         tunnelPolling = null;
