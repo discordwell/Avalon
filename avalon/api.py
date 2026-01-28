@@ -5,7 +5,7 @@ from typing import Dict, Optional
 
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -73,18 +73,33 @@ async def start_game() -> Dict:
 
 
 @app.post("/game/action")
-async def action(req: ActionRequest) -> Dict:
-    await engine.apply_action(req.player_id, req.action_type, req.payload)
+async def action(req: ActionRequest, request: Request) -> Dict:
+    player_id = req.player_id
+    if req.token:
+        player_id = engine.player_id_for_token(req.token)
+    if not player_id:
+        return JSONResponse(status_code=400, content={"error": "token required"})
+    if not req.token and request.client and request.client.host not in ("127.0.0.1", "::1"):
+        return JSONResponse(status_code=403, content={"error": "token required"})
+    await engine.apply_action(player_id, req.action_type, req.payload)
     await bot_manager.maybe_act()
     return {"state": engine.public_state()}
 
 
 @app.get("/game/state")
-async def get_state(player_id: Optional[str] = None) -> Dict:
+async def get_state(
+    request: Request, player_id: Optional[str] = None, token: Optional[str] = None
+) -> Dict:
     if not engine.has_state():
         return {"state": None}
+    if token:
+        player_id = engine.player_id_for_token(token)
     if player_id:
-        return engine.private_state_for(player_id)
+        if not token and request.client and request.client.host not in ("127.0.0.1", "::1"):
+            return JSONResponse(status_code=403, content={"error": "token required"})
+        payload = engine.private_state_for(player_id)
+        payload["player_id"] = player_id
+        return payload
     return {"state": engine.public_state()}
 
 
@@ -138,12 +153,20 @@ async def join_player(req: PlayerJoinRequest) -> Dict:
     if not req.name:
         return JSONResponse(status_code=400, content={"error": "Name required"})
     player = await engine.join_next_human(req.name)
-    return {"player_id": player.id, "state": engine.public_state()}
+    token = engine.token_for(player.id)
+    return {"player_id": player.id, "token": token, "state": engine.public_state()}
 
 
 @app.post("/game/players/ready")
-async def ready_player(req: PlayerReadyRequest) -> Dict:
-    state = await engine.set_ready(req.player_id, req.ready)
+async def ready_player(req: PlayerReadyRequest, request: Request) -> Dict:
+    player_id = req.player_id
+    if req.token:
+        player_id = engine.player_id_for_token(req.token)
+    if not player_id:
+        return JSONResponse(status_code=400, content={"error": "token required"})
+    if not req.token and request.client and request.client.host not in ("127.0.0.1", "::1"):
+        return JSONResponse(status_code=403, content={"error": "token required"})
+    state = await engine.set_ready(player_id, req.ready)
     humans = [p for p in state.players if not p.is_bot]
     all_ready = humans and all(p.claimed and p.ready for p in humans)
     if not state.started and all_ready:

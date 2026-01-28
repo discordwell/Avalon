@@ -97,7 +97,8 @@ class CreateGameRequest(BaseModel):
 
 
 class ActionRequest(BaseModel):
-    player_id: str
+    player_id: Optional[str] = None
+    token: Optional[str] = None
     action_type: str
     payload: Dict[str, Any] = Field(default_factory=dict)
 
@@ -117,5 +118,6 @@ class PlayerJoinRequest(BaseModel):
 
 
 class PlayerReadyRequest(BaseModel):
-    player_id: str
+    player_id: Optional[str] = None
+    token: Optional[str] = None
     ready: bool = True

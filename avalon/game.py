@@ -107,6 +107,8 @@ class GameEngine:
         self._store = store
         self._state: Optional[GameState] = None
         self._lock = asyncio.Lock()
+        self._token_by_player_id: Dict[str, str] = {}
+        self._player_id_by_token: Dict[str, str] = {}
 
     @property
     def state(self) -> GameState:
@@ -136,6 +138,8 @@ class GameEngine:
                 lady_of_lake=req.lady_of_lake,
             )
             self._store.clear()
+            self._token_by_player_id = {}
+            self._player_id_by_token = {}
             self._state = GameState(
                 id=str(uuid.uuid4()),
                 config=config,
@@ -143,6 +147,8 @@ class GameEngine:
                 started=False,
                 phase=Phase.lobby,
             )
+            for player in self._state.players:
+                self._assign_token(player.id)
             self._emit("game_created", {"player_count": player_count})
             return self.state
 
@@ -151,6 +157,7 @@ class GameEngine:
             state = self.state
             if state.started:
                 return state
+            random.shuffle(state.players)
             self._assign_roles(state)
             state.started = True
             state.phase = Phase.team_proposal
@@ -202,6 +209,7 @@ class GameEngine:
             next_id = self._next_id(prefix)
             display_name = name or (f"Bot {next_id[1:]}" if is_bot else f"Human {next_id[1:]}")
             state.players.append(Player(id=next_id, name=display_name, is_bot=is_bot))
+            self._assign_token(next_id)
             self._emit("player_added", {"player_id": next_id, "is_bot": is_bot})
             return state
 
@@ -213,6 +221,7 @@ class GameEngine:
             if not self._has_player(player_id):
                 raise ValueError("Unknown player")
             state.players = [p for p in state.players if p.id != player_id]
+            self._clear_token(player_id)
             self._emit("player_removed", {"player_id": player_id})
             return state
 
@@ -286,6 +295,7 @@ class GameEngine:
             player = self._get_player(player_id)
             player.claimed = False
             player.ready = False
+            self._rotate_token(player_id)
             suffix = player.id[1:] if len(player.id) > 1 else ""
             player.name = f"Bot {suffix}" if player.is_bot else f"Human {suffix}"
             self._emit("player_reset", {"player_id": player_id})
@@ -596,6 +606,18 @@ class GameEngine:
 
         return visibility
 
+    def token_for(self, player_id: str) -> str:
+        token = self._token_by_player_id.get(player_id)
+        if not token:
+            raise ValueError("Unknown player")
+        return token
+
+    def player_id_for_token(self, token: str) -> str:
+        player_id = self._player_id_by_token.get(token)
+        if not player_id:
+            raise ValueError("Invalid player token")
+        return player_id
+
     def _emit(self, event_type: str, payload: Dict) -> None:
         self._store.append(Event(type=event_type, payload=payload))
 
@@ -618,3 +640,17 @@ class GameEngine:
                 continue
         next_num = max(numbers, default=0) + 1
         return f"{prefix}{next_num}"
+
+    def _assign_token(self, player_id: str) -> None:
+        token = str(uuid.uuid4())
+        self._token_by_player_id[player_id] = token
+        self._player_id_by_token[token] = player_id
+
+    def _clear_token(self, player_id: str) -> None:
+        token = self._token_by_player_id.pop(player_id, None)
+        if token:
+            self._player_id_by_token.pop(token, None)
+
+    def _rotate_token(self, player_id: str) -> None:
+        self._clear_token(player_id)
+        self._assign_token(player_id)

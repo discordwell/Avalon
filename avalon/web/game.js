@@ -9,6 +9,7 @@ const api = (path, options = {}) => fetch(path, options).then(async (res) => {
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(window.location.search);
 
+let playerToken = params.get("token") || localStorage.getItem("avalon_player_token") || "";
 let playerId = params.get("player_id") || localStorage.getItem("avalon_player_id") || "";
 
 const playerNameEl = $("playerName");
@@ -24,7 +25,7 @@ let lastChatCount = 0;
 let cachedState = null;
 let cachedPrivate = null;
 
-if (!playerId) {
+if (!playerId && !playerToken) {
   roleRevealEl.textContent = "Pick a seat first.";
 }
 
@@ -226,7 +227,7 @@ async function submitAction(actionType, payload) {
   await api("/game/action", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ player_id: playerId, action_type: actionType, payload }),
+    body: JSON.stringify({ token: playerToken || undefined, player_id: playerId, action_type: actionType, payload }),
   });
 }
 
@@ -239,12 +240,23 @@ $("sendChat").addEventListener("click", async () => {
 
 async function refresh() {
   try {
+    if (playerToken) {
+      localStorage.setItem("avalon_player_token", playerToken);
+    }
     const [publicState, privateState] = await Promise.all([
       api("/game/state"),
-      playerId ? api(`/game/state?player_id=${playerId}`) : Promise.resolve(null),
+      playerToken
+        ? api(`/game/state?token=${playerToken}`)
+        : playerId
+          ? api(`/game/state?player_id=${playerId}`)
+          : Promise.resolve(null),
     ]);
     cachedState = publicState.state;
     cachedPrivate = privateState;
+    if (cachedPrivate?.player_id) {
+      playerId = cachedPrivate.player_id;
+      localStorage.setItem("avalon_player_id", playerId);
+    }
 
     if (!cachedState) {
       roleRevealEl.textContent = "Waiting for host to create a game.";

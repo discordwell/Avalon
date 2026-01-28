@@ -20,8 +20,9 @@ const hostSlotListEl = $("hostSlotList");
 const hostAddHuman = $("hostAddHuman");
 const hostRemoveHuman = $("hostRemoveHuman");
 
-const isHost = ["localhost", "127.0.0.1"].includes(window.location.hostname) || window.location.hostname.endsWith(".trycloudflare.com");
+const isHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 let playerId = localStorage.getItem("avalon_player_id") || "";
+let playerToken = localStorage.getItem("avalon_player_token") || "";
 
 function renderPlayers(players) {
   playerListEl.innerHTML = "";
@@ -94,7 +95,11 @@ async function joinGame() {
       body: JSON.stringify({ name }),
     });
     playerId = result.player_id;
+    playerToken = result.token || "";
     localStorage.setItem("avalon_player_id", playerId);
+    if (playerToken) {
+      localStorage.setItem("avalon_player_token", playerToken);
+    }
     seatInfoEl.textContent = `Seat claimed as ${name}.`;
     lobbyHintEl.textContent = "Seat claimed. Click Ready when you're set.";
     await refresh();
@@ -108,11 +113,15 @@ async function readyUp() {
     lobbyHintEl.textContent = "Join the game first.";
     return;
   }
+  if (!playerToken && !isHost) {
+    lobbyHintEl.textContent = "Missing player token. Rejoin the lobby link.";
+    return;
+  }
   try {
     await api("/game/players/ready", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ player_id: playerId, ready: true }),
+      body: JSON.stringify({ token: playerToken || undefined, player_id: playerId, ready: true }),
     });
     lobbyHintEl.textContent = "Ready set. Waiting for others…";
     await refresh();
@@ -141,7 +150,11 @@ async function refresh() {
       seatInfoEl.textContent = `Seat: ${seat.name}. Status: ${seat.ready ? "Ready" : "Joined"}.`;
     }
     if (playerId && state.state.started) {
-      window.location.href = `/game?player_id=${playerId}`;
+      if (playerToken) {
+        window.location.href = `/game?token=${playerToken}`;
+      } else if (isHost) {
+        window.location.href = `/game?player_id=${playerId}`;
+      }
     }
   } catch (err) {
     lobbyHintEl.textContent = err.message;
