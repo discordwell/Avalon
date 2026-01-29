@@ -113,6 +113,10 @@ class BotPolicy:
 
     def _decide_assassination(self, prompt: str, state: GameState, player: Player) -> Dict:
         """Handle assassination with LLM + validation + fallback."""
+        # Defer to human evil teammates if present
+        if self._has_human_evil_player(state):
+            logger.info("Bot assassin deferring to human evil player for assassination decision")
+            return {"action_type": "chat", "payload": {"message": "pass"}}
 
         def extractor(text: str) -> ExtractionResult:
             result = LLMClient.extract_target(text, "TARGET")
@@ -209,6 +213,9 @@ class BotPolicy:
             return {"action_type": "quest_vote", "payload": {"success": success}}
 
         if state.phase == Phase.assassination and player.role == Role.assassin:
+            # Defer to human evil teammates if present
+            if self._has_human_evil_player(state):
+                return {"action_type": "chat", "payload": {"message": "pass"}}
             candidates = [p.id for p in state.players if p.id != player.id]
             return {"action_type": "assassinate", "payload": {"target_id": random.choice(candidates)}}
 
@@ -221,3 +228,11 @@ class BotPolicy:
     @staticmethod
     def _evil_ids(state: GameState) -> List[str]:
         return [p.id for p in state.players if p.role and alignment_for(p.role) == Alignment.evil]
+
+    @staticmethod
+    def _has_human_evil_player(state: GameState) -> bool:
+        """Check if there's at least one human player on the evil team."""
+        for p in state.players:
+            if not p.is_bot and p.role and alignment_for(p.role) == Alignment.evil:
+                return True
+        return False
