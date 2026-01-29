@@ -6,28 +6,66 @@ from ..models import Alignment, GameState, Phase, Player, Role
 from ..game import alignment_for, team_size
 
 
+# Example dialogue patterns extracted from Avalon-NLU dataset
+EVIL_DIALOGUE_EXAMPLES = [
+    "i'll just go ahead and approve it. its just the first round.",
+    "i want to note that it's a bit weird that {player} did not put themselves on the party.",
+    "nothing certain, but it is a little suspicious, that's all.",
+    "i think {player} is suspicious that they voted no in last round.",
+    "typically if you are good, you would want to put yourself on the party.",
+    "it would be weird for {player} to be bad, but they did also vote no which is a bit suspicious.",
+    "this looks good to me. however as a good person, i would like to suggest myself to be on the quest.",
+]
+
+GOOD_DIALOGUE_EXAMPLES = [
+    "this seems reasonable to me. let's see how the vote goes.",
+    "yeah, nothing to go off on right now, so i am fine with this.",
+    "we have nothing else to go off of so i am fine with this party.",
+    "i'd rather keep sticking with the first party and adding to it.",
+    "let's just stick with this and gain some information.",
+    "i guess {player} is a little suspicious for not including themselves in the first quest.",
+    "people who are eager to make extreme allegations are also suspicious.",
+]
+
+MERLIN_DIALOGUE_EXAMPLES = [
+    "hmm so this is what i would suggest, we had a party with {player1} and {player2} succeed.",
+    "i would like to quickly narrow down this scope and test them.",
+    "if the quest succeeds, we don't know if they're good but we gain a success. if it fails we have something to focus on.",
+    "given the first round, we have pretty strong evidence about what happened.",
+    "a normal percival should not easily reveal themselves - if i were percival, i would wait for more information.",
+]
+
+
 def build_system_prompt(player: Player, knowledge: List[str]) -> str:
     role = player.role.value if player.role else "Unknown"
     alignment = alignment_for(player.role)
     alignment_str = alignment.value if alignment else "Unknown"
     facts = "\n".join(f"- {item}" for item in knowledge) or "- None"
 
-    # Role-specific personality guidance
+    # Role-specific personality guidance with dialogue examples
     if alignment == Alignment.evil:
         personality = (
             "You are EVIL. Your goal is to sabotage quests and avoid detection.\n"
             "DECEPTION IS KEY: Never reveal your true alignment or reasoning!\n"
             "- Pretend to be good and helpful\n"
-            "- Cast subtle suspicion on good players\n"
+            "- Cast SUBTLE suspicion on good players (not too aggressive)\n"
             "- Defend your evil teammates indirectly\n"
-            "- Act confused or concerned, not aggressive"
+            "- Act confused or concerned, not aggressive\n\n"
+            "Example things evil players say:\n"
+            '- "i think [player] is suspicious that they voted no last round"\n'
+            '- "nothing certain, but it is a little suspicious"\n'
+            '- "as a good person, i would like to suggest myself for the quest"'
         )
     else:
         personality = (
             "You are GOOD. Your goal is to find evil players and succeed on quests.\n"
             "- Share your genuine suspicions and observations\n"
             "- Pay attention to voting patterns and behavior\n"
-            "- Be willing to take risks to find information"
+            "- Be willing to take risks to find information\n\n"
+            "Example things good players say:\n"
+            '- "this seems reasonable to me, let\'s see how it goes"\n'
+            '- "we have nothing to go off of so i am fine with this party"\n'
+            '- "let\'s stick with this and gain some information"'
         )
 
     # Special role guidance
@@ -36,25 +74,33 @@ def build_system_prompt(player: Player, knowledge: List[str]) -> str:
         role_tips = (
             "\nYou are MERLIN - you know who is evil! But be careful:\n"
             "- Don't be too obvious or the Assassin will target you\n"
-            "- Guide good players subtly without revealing yourself"
+            "- Guide good players subtly by framing insights as logical deductions\n"
+            "- Say things like 'given the voting pattern...' rather than stating facts directly\n\n"
+            "Example Merlin dialogue (subtle guidance):\n"
+            '- "i would like to quickly narrow down this scope and test them"\n'
+            '- "if the quest fails we have something to focus on"\n'
+            '- "given the first round, we have some evidence about what happened"'
         )
     elif player.role == Role.assassin:
         role_tips = (
             "\nYou are the ASSASSIN - if good wins 3 quests, you can still win by killing Merlin.\n"
             "- Watch for players who seem to 'know too much'\n"
-            "- Note who consistently identifies evil players"
+            "- Note who consistently identifies evil players\n"
+            "- Players who guide the team subtly without revealing info might be Merlin"
         )
     elif player.role == Role.morgana:
         role_tips = (
             "\nYou are MORGANA - you appear as Merlin to Percival.\n"
-            "- Try to act like Merlin to confuse Percival\n"
-            "- Claim to be Merlin if it helps your team"
+            "- Try to act like Merlin by giving 'subtle guidance'\n"
+            "- Frame suspicions as logical deductions to seem like Merlin\n"
+            "- Claim to be Merlin if it helps confuse Percival"
         )
     elif player.role == Role.percival:
         role_tips = (
             "\nYou are PERCIVAL - you see Merlin and Morgana but don't know which is which.\n"
-            "- Try to figure out who the real Merlin is\n"
-            "- Protect whoever you think is Merlin"
+            "- Try to figure out who the real Merlin is by their behavior\n"
+            "- Protect whoever you think is Merlin\n"
+            "- Be careful not to reveal who you think Merlin is"
         )
 
     return (
@@ -64,7 +110,7 @@ def build_system_prompt(player: Player, knowledge: List[str]) -> str:
         f"{personality}{role_tips}\n\n"
         "What you know:\n"
         f"{facts}\n\n"
-        "IMPORTANT: Always speak in character! Your chat messages should sound natural and strategic."
+        "IMPORTANT: Speak naturally! Keep messages short (1-2 sentences). Sound like a real player, not an AI."
     )
 
 
@@ -123,19 +169,24 @@ def build_action_instructions(state: GameState, player: Player) -> str:
 def _team_proposal_instructions(player: Player, player_names: List[str], required_size: int) -> str:
     names_list = ", ".join(player_names)
     example_names = player_names[:required_size]
+    other_player = player_names[1] if len(player_names) > 1 else "someone"
 
     return f"""=== YOUR TASK ===
 You are the LEADER. Propose a team of exactly {required_size} players.
 
-First, say something to the group explaining your choice (1-2 sentences).
+First, say something brief to the group (1-2 sentences max).
 Then, output your team selection.
 
 FORMAT:
-SAY: [Your message to the group - explain your reasoning in character]
+SAY: [Brief explanation - sound natural, not robotic]
 TEAM: Name1, Name2{", Name3" if required_size > 2 else ""}
 
-EXAMPLE:
-SAY: I think we should try a fresh combination. I trust {example_names[1]} based on their voting pattern.
+EXAMPLE 1 (early game):
+SAY: random given no information. included myself as i am good of course.
+TEAM: {player.name}, {other_player}
+
+EXAMPLE 2 (with info):
+SAY: i'd rather keep sticking with the last successful party and add one more.
 TEAM: {", ".join(example_names)}
 
 Available players: {names_list}
@@ -151,21 +202,23 @@ def _team_vote_instructions(state: GameState, player: Player) -> str:
     return f"""=== YOUR TASK ===
 Vote on the proposed team: {team_str} (proposed by {leader.name})
 
-First, say something about the team (1-2 sentences).
+First, say something brief (1-2 sentences max).
 Then, cast your vote.
 
 FORMAT:
-SAY: [Your comment on the team - share your opinion in character]
-VOTE: APPROVE
-or
-VOTE: REJECT
+SAY: [Brief comment - sound natural]
+VOTE: APPROVE or REJECT
 
 EXAMPLE (approving):
-SAY: This team looks reasonable to me. Let's give it a shot.
+SAY: this seems reasonable to me. let's see how it goes.
+VOTE: APPROVE
+
+EXAMPLE (approving early game):
+SAY: not enough info for now, good on party.
 VOTE: APPROVE
 
 EXAMPLE (rejecting):
-SAY: I'm not comfortable with this combination. I'd like to see different players.
+SAY: i'm not totally sure who to trust, but i disagree with this party.
 VOTE: REJECT
 
 Your response:"""
@@ -175,28 +228,26 @@ def _quest_instructions(player: Player) -> str:
     alignment = alignment_for(player.role)
     if alignment == Alignment.loyal:
         alignment_note = "As a LOYAL servant, you MUST vote SUCCESS. You cannot fail quests."
-        example_say = "Let's make this quest succeed for Arthur!"
+        example_say = "let's do this! hoping for a success."
         example_vote = "SUCCESS"
     else:
         alignment_note = (
             "As EVIL, you may vote FAIL to sabotage the quest.\n"
-            "Consider: Is this a good time to fail? Will you be suspected?"
+            "Consider: Is this a good time to fail? Will you be suspected?\n"
+            "If multiple evil on quest, coordinate - don't both fail!"
         )
-        example_say = "I hope this quest goes well for our team."
+        example_say = "i hope this quest goes well for our team."
         example_vote = "SUCCESS"
 
     return f"""=== YOUR TASK ===
 You are on the quest! Submit your secret vote.
 {alignment_note}
 
-First, say something to the group (remember, your VOTE is secret - don't reveal it!).
-Then, submit your vote.
+Say something brief (your VOTE is secret - don't reveal it!).
 
 FORMAT:
-SAY: [Something encouraging or neutral - never reveal your actual vote!]
-QUEST: SUCCESS
-or
-QUEST: FAIL
+SAY: [Brief encouraging comment - never hint at your vote!]
+QUEST: SUCCESS or FAIL
 
 EXAMPLE:
 SAY: {example_say}
@@ -211,19 +262,19 @@ def _assassination_instructions(player: Player, player_names: List[str]) -> str:
 
     return f"""=== YOUR TASK ===
 Good has won 3 quests, but you can still win!
-As the ASSASSIN, identify and kill Merlin to steal victory for evil.
+As the ASSASSIN, identify and kill Merlin to steal victory.
 
-Think about: Who seemed to know too much? Who guided good players subtly?
-
-First, discuss with your evil teammates who you suspect.
-Then, make your final choice.
+Think about:
+- Who seemed to "know too much" about evil players?
+- Who guided the team with subtle suggestions?
+- Who avoided being on failed quests suspiciously well?
 
 FORMAT:
-SAY: [Discuss your suspicions with the group]
+SAY: [Your reasoning - who do you suspect is Merlin?]
 TARGET: PlayerName
 
 EXAMPLE:
-SAY: I noticed {targets[0] if targets else "someone"} always seemed to know which teams to reject. They might be Merlin.
+SAY: i noticed {targets[0] if targets else "someone"} always seemed to guide us away from bad parties. they might be merlin.
 TARGET: {targets[0] if targets else "Unknown"}
 
 Possible targets: {targets_list}
@@ -238,15 +289,12 @@ def _lady_of_lake_instructions(player: Player, player_names: List[str]) -> str:
 You hold the Lady of the Lake! Choose someone to investigate.
 You will secretly learn if they are Good or Evil.
 
-First, explain to the group who you want to investigate and why.
-Then, make your choice.
-
 FORMAT:
-SAY: [Explain your reasoning to the group]
+SAY: [Brief reason for your choice]
 INSPECT: PlayerName
 
 EXAMPLE:
-SAY: I want to check {targets[0] if targets else "someone"} - their behavior has been inconsistent.
+SAY: i want to check {targets[0] if targets else "someone"} - their voting has been inconsistent.
 INSPECT: {targets[0] if targets else "Unknown"}
 
 Possible targets: {targets_list}
