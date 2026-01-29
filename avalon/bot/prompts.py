@@ -153,16 +153,16 @@ def build_context(state: GameState, player_id: str, recent_chat: List[str]) -> s
     player_roster = ", ".join(p.name for p in state.players)
 
     # Quest history summary
-    quest_history = ""
-    if state.quest_results:
-        results = ["✓" if r.success else "✗" for r in state.quest_results]
-        quest_history = f"Quest history: {' '.join(results)}\n"
+    quest_history_str = ""
+    if state.quest_history:
+        results = ["✓" if r.succeeded else "✗" for r in state.quest_history]
+        quest_history_str = f"Quest history: {' '.join(results)}\n"
 
     return (
         "=== GAME STATE ===\n"
         f"Players: {player_roster}\n"
         f"Quest {state.quest_number} | Successes: {state.success_count} | Fails: {state.fail_count}\n"
-        f"{quest_history}"
+        f"{quest_history_str}"
         f"Leader: {leader.name}\n"
         f"Team size needed: {team_needed}\n"
         f"Rejected proposals this round: {state.proposal_attempts}\n"
