@@ -142,6 +142,21 @@ class LLMClient:
         if message.startswith("'") and message.endswith("'"):
             message = message[1:-1]
 
+        # Remove any action keywords that leaked into the message
+        # These patterns match action formats that shouldn't be in chat
+        action_patterns = [
+            r"\s*VOTE:\s*(APPROVE|REJECT).*$",
+            r"\s*QUEST:\s*(SUCCESS|FAIL).*$",
+            r"\s*TEAM:\s*[^\n]*$",
+            r"\s*TARGET:\s*[^\n]*$",
+            r"\s*INSPECT:\s*[^\n]*$",
+        ]
+        for pattern in action_patterns:
+            message = re.sub(pattern, "", message, flags=re.IGNORECASE).strip()
+
+        if not message:
+            return ExtractionResult(success=False, value=None, error="SAY: line only contained action keywords")
+
         return ExtractionResult(success=True, value=message)
 
     @staticmethod
