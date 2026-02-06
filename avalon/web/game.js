@@ -326,5 +326,14 @@ async function refresh() {
   }
 }
 
+let pollTimer = null;
+
 refresh();
-setInterval(refresh, 1500);
+pollTimer = setInterval(() => {
+  if (cachedState && cachedState.phase === "game_over") {
+    clearInterval(pollTimer);
+    pollTimer = null;
+    return;
+  }
+  refresh();
+}, 1500);
