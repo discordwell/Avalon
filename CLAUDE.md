@@ -1,7 +1,7 @@
 # Avalon Project
 
 ## Development
-- Server: `python -m avalon.main` (runs on port 8000)
+- Server: `python -m avalon.main` (runs on port 8010)
 - Smoke test: `python scripts/smoke_test.py`
 - Debug logging: `AVALON_DEBUG=1`
 
